@@ -110,6 +110,7 @@ footer { text-align:center; font-size:0.62rem; color:rgba(139,148,158,0.35); let
         <option value="en">English</option>
         <option value="ko">한국어</option>
         <option value="ja">日本語</option>
+        <option value="th">ภาษาไทย (Thai)</option>
       </select>
     </div>
     <button class="swap-btn" id="swapBtn">⇄</button>
@@ -120,6 +121,7 @@ footer { text-align:center; font-size:0.62rem; color:rgba(139,148,158,0.35); let
         <option value="en">English</option>
         <option value="ko">한국어</option>
         <option value="ja">日本語</option>
+        <option value="th">ภาษาไทย (Thai)</option>
       </select>
     </div>
   </div>
@@ -168,7 +170,7 @@ footer { text-align:center; font-size:0.62rem; color:rgba(139,148,158,0.35); let
 <footer>ແປພາສາລາວ · iOS & Android Compatible · Free</footer>
 
 <script>
-const LANGS = { lo:'ພາສາລາວ', zh:'中文', en:'English', ko:'한국어', ja:'日本語' };
+const LANGS = { lo:'ພາສາລາວ', zh:'中文', en:'English', ko:'한국어', ja:'日本語', th:'ภาษาไทย' };
 
 const PHRASES = [
   {lao:'ສະບາຍດີ', zh:'你好', en:'Hello'},
@@ -269,17 +271,24 @@ speakBtn.addEventListener('click', async () => {
     try {
       const url = `${GAS_URL}?action=tts&text=${encodeURIComponent(text)}&lang=lo`;
       const r = await fetch(url, { redirect: 'follow' });
-      const d = await r.json();
-      if (d.audio) {
-        const audioData = 'data:audio/mpeg;base64,' + d.audio;
+      const txt = await r.text();
+      // Parse JSON carefully - response may have extra whitespace
+      const d = JSON.parse(txt.trim());
+      if (d.audio && d.audio.length > 100) {
+        // Clean base64 string - remove any whitespace/newlines
+        const cleanB64 = d.audio.replace(/\s/g, '');
+        const audioData = 'data:audio/mpeg;base64,' + cleanB64;
         const audio = new Audio(audioData);
-        audio.onplay = () => { speakBtn.textContent = '🔊 播放中'; };
+        speakBtn.textContent = '🔊 播放中';
         audio.onended = () => { speakBtn.textContent = '♪ 朗读'; speakBtn.disabled = false; };
-        audio.onerror = () => { speakBtn.textContent = '♪ 朗读'; speakBtn.disabled = false; };
+        audio.onerror = (e) => { 
+          console.log('Audio error:', e);
+          speakBtn.textContent = '♪ 朗读'; speakBtn.disabled = false; 
+        };
         await audio.play();
         return;
       }
-    } catch(e) {}
+    } catch(e) { console.log('TTS error:', e); }
     speakBtn.textContent = '♪ 朗读';
     speakBtn.disabled = false;
     errBox.textContent = '⚠ 老挝语朗读加载失败，请检查网络后重试';
@@ -289,7 +298,7 @@ speakBtn.addEventListener('click', async () => {
   }
 
   // For other languages: use device TTS
-  const codes = { zh:'zh-CN', en:'en-US', ko:'ko-KR', ja:'ja-JP' };
+  const codes = { zh:'zh-CN', en:'en-US', ko:'ko-KR', ja:'ja-JP', th:'th-TH' };
   const u = new SpeechSynthesisUtterance(result);
   u.lang = codes[lang] || 'en-US';
   u.onstart = () => { speakBtn.textContent = '🔊 播放中'; };
@@ -316,7 +325,7 @@ async function doTranslate() {
   result = '';
 
   // Language codes
-  const gtCode = { lo:'lo', zh:'zh-CN', en:'en', ko:'ko', ja:'ja' };
+  const gtCode = { lo:'lo', zh:'zh-CN', en:'en', ko:'ko', ja:'ja', th:'th' };
 
   // Try Google Apps Script first, then fallbacks
   const strategies = [
