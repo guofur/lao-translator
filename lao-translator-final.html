@@ -255,38 +255,48 @@ copyBtn.addEventListener('click', () => {
   }
 });
 
-speakBtn.addEventListener('click', () => {
+speakBtn.addEventListener('click', async () => {
   if (!result) return;
   const lang = tgtLang.value;
-
-  // All languages: use Google TTS (best Lao support)
   const ttsLang = { lo:'lo', zh:'zh-CN', en:'en-US', ko:'ko-KR', ja:'ja-JP' }[lang] || 'lo';
   const text = result.slice(0, 200);
-  const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${ttsLang}&client=tw-ob`;
 
   speakBtn.textContent = '⏳ 加载...';
   speakBtn.disabled = true;
 
-  const audio = new Audio();
-  audio.src = url;
-  audio.oncanplaythrough = () => { audio.play(); };
-  audio.onplay = () => { speakBtn.textContent = '🔊 播放中'; };
-  audio.onended = () => { speakBtn.textContent = '♪ 朗读'; speakBtn.disabled = false; };
-  audio.onerror = () => {
-    // Fallback: device TTS for non-Lao
-    speakBtn.textContent = '♪ 朗读'; speakBtn.disabled = false;
-    if (lang !== 'lo') {
-      const codes = { zh:'zh-CN', en:'en-US', ko:'ko-KR', ja:'ja-JP' };
-      const u = new SpeechSynthesisUtterance(result);
-      u.lang = codes[lang] || 'en-US';
-      speechSynthesis.cancel(); speechSynthesis.speak(u);
-    } else {
-      errBox.textContent = '⚠ 老挝语朗读加载失败，请检查网络后重试';
-      errBox.classList.add('on');
-      setTimeout(() => errBox.classList.remove('on'), 3000);
-    }
-  };
-  audio.load();
+  // For Lao language: use Google Apps Script TTS (server-side, bypasses CORS)
+  if (lang === 'lo') {
+    try {
+      const url = `${GAS_URL}?action=tts&text=${encodeURIComponent(text)}&lang=lo`;
+      const r = await fetch(url, { redirect: 'follow' });
+      const d = await r.json();
+      if (d.audio) {
+        const audioData = 'data:audio/mpeg;base64,' + d.audio;
+        const audio = new Audio(audioData);
+        audio.onplay = () => { speakBtn.textContent = '🔊 播放中'; };
+        audio.onended = () => { speakBtn.textContent = '♪ 朗读'; speakBtn.disabled = false; };
+        audio.onerror = () => { speakBtn.textContent = '♪ 朗读'; speakBtn.disabled = false; };
+        await audio.play();
+        return;
+      }
+    } catch(e) {}
+    speakBtn.textContent = '♪ 朗读';
+    speakBtn.disabled = false;
+    errBox.textContent = '⚠ 老挝语朗读加载失败，请检查网络后重试';
+    errBox.classList.add('on');
+    setTimeout(() => errBox.classList.remove('on'), 3000);
+    return;
+  }
+
+  // For other languages: use device TTS
+  const codes = { zh:'zh-CN', en:'en-US', ko:'ko-KR', ja:'ja-JP' };
+  const u = new SpeechSynthesisUtterance(result);
+  u.lang = codes[lang] || 'en-US';
+  u.onstart = () => { speakBtn.textContent = '🔊 播放中'; };
+  u.onend = () => { speakBtn.textContent = '♪ 朗读'; speakBtn.disabled = false; };
+  u.onerror = () => { speakBtn.textContent = '♪ 朗读'; speakBtn.disabled = false; };
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
 });
 
 goBtn.addEventListener('click', doTranslate);
